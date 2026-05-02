@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VERTEX IA — Mercado de Renda Variável</title>
+  <style>
+    :root {
+      --bg:       #0d0f14;
+      --surface:  #151820;
+      --card:     #1b1f2b;
+      --border:   #252a38;
+      --text:     #e6eaf4;
+      --muted:    #6b7494;
+      --accent:   #4f7cff;
+      --green:    #22d46c;
+      --red:      #ff4d6a;
+      --yellow:   #f5a623;
+      --fii:      #b06cff;
+      --radius:   10px;
+      --font:     'Inter', 'Segoe UI', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ─────────────────────────────────────── */
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--accent); }
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    #clock {
+      color: var(--muted);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+    #status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .3; }
+    }
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all .2s;
+    }
+    #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── TICKER TAPE ─────────────────────────────── */
+    .tape-wrapper {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      height: 34px;
+      display: flex;
+      align-items: center;
+    }
+    .tape {
+      display: flex;
+      gap: 48px;
+      white-space: nowrap;
+      animation: scroll-tape 40s linear infinite;
+      padding-left: 100%;
+    }
+    @keyframes scroll-tape {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-100%); }
+    }
+    .tape-item { font-size: 12px; display: flex; gap: 6px; }
+    .tape-item .sym  { font-weight: 600; }
+    .tape-item .val  { color: var(--muted); }
+
+    /* ── LAYOUT ──────────────────────────────────── */
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2 .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+    .badge-green { background: rgba(34,212,108,.15); color: var(--green); }
+    .badge-red   { background: rgba(255,77,106,.15);  color: var(--red);   }
+    .badge-fii   { background: rgba(176,108,255,.15); color: var(--fii);   }
+
+    /* ── INDICES STRIP ───────────────────────────── */
+    .indices {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .idx-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      transition: border-color .2s;
+    }
+    .idx-card:hover { border-color: var(--accent); }
+    .idx-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .idx-value { font-size: 22px; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
+    .idx-change { font-size: 13px; font-weight: 500; }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+    .neu { color: var(--muted); }
+
+    /* ── TWO-COL GRID ────────────────────────────── */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── TABLE CARD ──────────────────────────────── */
+    .table-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .table-card-header {
+      padding: 16px 20px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+    }
+    thead th:last-child,
+    thead th:nth-last-child(2) { text-align: right; }
+    tbody tr {
+      border-bottom: 1px solid rgba(37,42,56,.6);
+      transition: background .15s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,.03); }
+    tbody td {
+      padding: 11px 12px;
+      vertical-align: middle;
+    }
+    td:last-child,
+    td:nth-last-child(2) { text-align: right; }
+
+    .sym-col { font-weight: 600; font-size: 13px; }
+    .name-col { color: var(--muted); font-size: 12px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .price-col { font-variant-numeric: tabular-nums; font-weight: 500; }
+    .chg-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      float: right;
+    }
+    .chg-pill.pos { background: rgba(34,212,108,.12); color: var(--green); }
+    .chg-pill.neg { background: rgba(255,77,106,.12);  color: var(--red);   }
+
+    .mini-bar {
+      height: 4px;
+      border-radius: 2px;
+      margin-top: 3px;
+      max-width: 80px;
+    }
+
+    /* ── FII TABLE ───────────────────────────────── */
+    .fii-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      padding: 16px 20px 20px;
+    }
+    .fii-tile {
+      background: rgba(176,108,255,.05);
+      border: 1px solid rgba(176,108,255,.15);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color .2s;
+    }
+    .fii-tile:hover { border-color: var(--fii); }
+    .fii-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .fii-sym { font-weight: 700; font-size: 15px; }
+    .fii-type { font-size: 10px; background: rgba(176,108,255,.15); color: var(--fii); padding: 2px 7px; border-radius: 10px; }
+    .fii-name { font-size: 11px; color: var(--muted); }
+    .fii-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; }
+    .fii-price { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .fii-dy { font-size: 11px; color: var(--yellow); }
+    .fii-dy span { font-weight: 600; }
+
+    /* ── LOADING / ERROR ─────────────────────────── */
+    .skeleton { background: linear-gradient(90deg, var(--border) 25%, #2a3045 50%, var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .sk-row td { padding: 10px 12px; }
+    .sk-cell { height: 14px; border-radius: 4px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+
+    /* ── FOOTER ──────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── LAST UPDATE ─────────────────────────────── */
+    .last-update {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">VERTEX <span>IA</span> — Mercado RV</div>
+  <div class="nav-right">
+    <div id="status-dot"></div>
+    <span id="clock"></span>
+    <button id="refresh-btn" onclick="fetchAll()">⟳ Atualizar</button>
+  </div>
+</nav>
+
+<!-- TICKER TAPE -->
+<div class="tape-wrapper">
+  <div class="tape" id="tape">
+    <span class="tape-item"><span class="sym">IBOV</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">IFIX</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">USD/BRL</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">PETR4</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">VALE3</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">ITUB4</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">BBDC4</span><span class="val">—</span></span>
+    <span class="tape-item"><span class="sym">MGLU3</span><span class="val">—</span></span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main>
+  <div class="last-update" id="last-update">Carregando dados...</div>
+
+  <!-- INDICES -->
+  <div class="indices" id="indices">
+    <div class="idx-card"><div class="idx-label">IBOVESPA</div><div class="idx-value skeleton" style="height:30px;width:120px;margin:4px 0"></div></div>
+    <div class="idx-card"><div class="idx-label">IFIX</div><div class="idx-value skeleton" style="height:30px;width:100px;margin:4px 0"></div></div>
+    <div class="idx-card"><div class="idx-label">USD / BRL</div><div class="idx-value skeleton" style="height:30px;width:80px;margin:4px 0"></div></div>
+    <div class="idx-card"><div class="idx-label">EUR / BRL</div><div class="idx-value skeleton" style="height:30px;width:80px;margin:4px 0"></div></div>
+    <div class="idx-card"><div class="idx-label">Selic Meta</div><div class="idx-value">13,25%</div><div class="idx-change neu">a.a.</div></div>
+  </div>
+
+  <!-- GAINERS / LOSERS -->
+  <div class="grid-2">
+    <!-- GAINERS -->
+    <div class="table-card" id="gainers-card">
+      <div class="table-card-header">
+        <h2>
+          Maiores Altas do Dia
+          <span class="badge badge-green">TOP 10</span>
+        </h2>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Ativo</th><th>Nome</th><th>Preço</th><th>Variação</th>
+        </tr></thead>
+        <tbody id="gainers-body">
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:120px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:100px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:140px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:110px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:130px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- LOSERS -->
+    <div class="table-card" id="losers-card">
+      <div class="table-card-header">
+        <h2>
+          Maiores Baixas do Dia
+          <span class="badge badge-red">TOP 10</span>
+        </h2>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Ativo</th><th>Nome</th><th>Preço</th><th>Variação</th>
+        </tr></thead>
+        <tbody id="losers-body">
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:120px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:100px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:140px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:110px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+          <tr class="sk-row"><td><div class="sk-cell skeleton" style="width:56px"></div></td><td><div class="sk-cell skeleton" style="width:130px"></div></td><td><div class="sk-cell skeleton" style="width:60px"></div></td><td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- FIIs -->
+  <div class="table-card" id="fiis-card">
+    <div class="table-card-header">
+      <h2>
+        Fundos de Investimento Imobiliário — FIIs
+        <span class="badge badge-fii">B3</span>
+      </h2>
+    </div>
+    <div class="fii-grid" id="fiis-grid">
+      <!-- tiles geradas por JS -->
+    </div>
+  </div>
+</main>
+
+<footer>
+  Dados fornecidos por <a href="https://brapi.dev" target="_blank">brapi.dev</a> · Atualizado automaticamente a cada 60s ·
+  Não constitui recomendação de investimento · VERTEX IA © 2026
+</footer>
+
+<script>
+/* ───────────────────────────────────────────────────────────
+   CONFIG
+─────────────────────────────────────────────────────────── */
+const BRAPI = 'https://brapi.dev/api';
+// Token gratuito — substitua por um token próprio em brapi.dev para maior cota
+const TOKEN = '';
+
+const ACOES_IBOV = [
+  'PETR4','VALE3','ITUB4','BBDC4','BBAS3','WEGE3','RENT3','LREN3',
+  'MGLU3','VBBR3','ABEV3','JBSS3','GGBR4','CSNA3','USIM5','BRAP4',
+  'HYPE3','RADL3','COGN3','AZUL4','GOLL4','CYRE3','MRVE3','EZTC3',
+  'CSAN3','ELET3','ELET6','CMIG4','CPFE3','ENGI11','TAEE11','TRPL4',
+  'SBSP3','SAPR11','KLBN11','SUZB3','FIBR3','BRKM5','UNIP6','PRIO3',
+  'RECV3','RRRP3','CMIN3','BPAC11','SANB11','BRSR6','BMGB4'
+];
+
+const FIIS_LIST = [
+  'MXRF11','HGLG11','KNRI11','XPLG11','IFIX11','VISC11','BRCO11',
+  'HSML11','XPML11','RBVA11','HGRE11','PVBI11','VGIP11','BTLG11',
+  'ALZR11','KNCR11','RBRR11','IRDM11','VINO11','URPR11','RZTR11',
+  'BCFF11','CXCE11','HABT11','HGBS11','MALL11','VRTA11','JSRE11',
+  'RECT11','TGAR11','PATL11','LVBI11'
+];
+
+function qs(tok) {
+  return tok ? `?token=${tok}` : '';
+}
+
+/* ───────────────────────────────────────────────────────────
+   CLOCK
+─────────────────────────────────────────────────────────── */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('pt-BR') + ' ' +
+    now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ───────────────────────────────────────────────────────────
+   FORMAT HELPERS
+─────────────────────────────────────────────────────────── */
+const fmtBRL  = v => (v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const fmtPct  = v => (v == null ? '—' : (v > 0 ? '+' : '') + Number(v).toFixed(2) + '%');
+const cls     = v => v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu';
+
+/* ───────────────────────────────────────────────────────────
+   FETCH QUOTES (chunked to avoid URL length limits)
+─────────────────────────────────────────────────────────── */
+async function fetchQuotes(symbols) {
+  const chunkSize = 20;
+  const chunks = [];
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    chunks.push(symbols.slice(i, i + chunkSize));
+  }
+
+  const results = [];
+  await Promise.all(chunks.map(async chunk => {
+    try {
+      const url = `${BRAPI}/quote/${chunk.join(',')}?fundamental=false&dividends=false${TOKEN ? '&token=' + TOKEN : ''}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.results) results.push(...json.results);
+    } catch (e) {
+      console.warn('chunk error', e);
+    }
+  }));
+  return results;
+}
+
+/* ───────────────────────────────────────────────────────────
+   RENDER INDICES
+─────────────────────────────────────────────────────────── */
+const INDICES_SYMS = ['^BVSP','IFIX','USDBRL=X','EURBRL=X'];
+
+async function fetchIndices() {
+  try {
+    // IBOV e câmbio via brapi
+    const ibovRes = await fetch(`${BRAPI}/quote/%5EBVSP${TOKEN ? '?token=' + TOKEN : ''}`);
+    const ibovJson = await ibovRes.json();
+    const ibov = ibovJson.results?.[0];
+
+    const fxRes = await fetch(`${BRAPI}/v2/currency?currency=USD-BRL,EUR-BRL${TOKEN ? '&token=' + TOKEN : ''}`);
+    const fxJson = await fxRes.json();
+    const usd = fxJson.currency?.find(c => c.fromCurrency === 'USD');
+    const eur = fxJson.currency?.find(c => c.fromCurrency === 'EUR');
+
+    renderIndices(ibov, usd, eur);
+  } catch (e) {
+    console.warn('indices error', e);
+    renderIndicesFallback();
+  }
+}
+
+function renderIndices(ibov, usd, eur) {
+  const ibovVal   = ibov?.regularMarketPrice;
+  const ibovChg   = ibov?.regularMarketChangePercent;
+  const usdVal    = usd?.bidPrice ?? usd?.ask;
+  const eurVal    = eur?.bidPrice ?? eur?.ask;
+
+  document.getElementById('indices').innerHTML = `
+    <div class="idx-card">
+      <div class="idx-label">IBOVESPA</div>
+      <div class="idx-value">${ibovVal ? Number(ibovVal).toLocaleString('pt-BR', {maximumFractionDigits:0}) : '—'}</div>
+      <div class="idx-change ${cls(ibovChg)}">${fmtPct(ibovChg)}</div>
+    </div>
+    <div class="idx-card">
+      <div class="idx-label">USD / BRL</div>
+      <div class="idx-value">${usdVal ? 'R$ ' + Number(usdVal).toFixed(2) : '—'}</div>
+      <div class="idx-change neu">Dólar Comercial</div>
+    </div>
+    <div class="idx-card">
+      <div class="idx-label">EUR / BRL</div>
+      <div class="idx-value">${eurVal ? 'R$ ' + Number(eurVal).toFixed(2) : '—'}</div>
+      <div class="idx-change neu">Euro Comercial</div>
+    </div>
+    <div class="idx-card">
+      <div class="idx-label">Selic Meta</div>
+      <div class="idx-value">13,25%</div>
+      <div class="idx-change neu">Reunião 07/05</div>
+    </div>
+    <div class="idx-card">
+      <div class="idx-label">CDI</div>
+      <div class="idx-value">13,15%</div>
+      <div class="idx-change neu">a.a.</div>
+    </div>
+  `;
+}
+
+function renderIndicesFallback() {
+  document.getElementById('indices').innerHTML = `
+    <div class="idx-card"><div class="idx-label">IBOVESPA</div><div class="idx-value neu">—</div><div class="idx-change neu">Indisponível</div></div>
+    <div class="idx-card"><div class="idx-label">USD / BRL</div><div class="idx-value neu">—</div></div>
+    <div class="idx-card"><div class="idx-label">EUR / BRL</div><div class="idx-value neu">—</div></div>
+    <div class="idx-card"><div class="idx-label">Selic Meta</div><div class="idx-value">13,25%</div><div class="idx-change neu">a.a.</div></div>
+    <div class="idx-card"><div class="idx-label">CDI</div><div class="idx-value">13,15%</div><div class="idx-change neu">a.a.</div></div>
+  `;
+}
+
+/* ───────────────────────────────────────────────────────────
+   RENDER GAINERS / LOSERS
+─────────────────────────────────────────────────────────── */
+function buildRow(q) {
+  const chg = q.regularMarketChangePercent;
+  const pill = `<span class="chg-pill ${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(2)}%</span>`;
+  return `<tr>
+    <td><div class="sym-col">${q.symbol}</div></td>
+    <td><div class="name-col" title="${q.shortName || ''}">${q.shortName || '—'}</div></td>
+    <td><div class="price-col">${fmtBRL(q.regularMarketPrice)}</div></td>
+    <td>${pill}</td>
+  </tr>`;
+}
+
+function showSkeletons(bodyId) {
+  document.getElementById(bodyId).innerHTML = Array(5).fill(`
+    <tr class="sk-row">
+      <td><div class="sk-cell skeleton" style="width:52px"></div></td>
+      <td><div class="sk-cell skeleton" style="width:110px"></div></td>
+      <td><div class="sk-cell skeleton" style="width:60px"></div></td>
+      <td><div class="sk-cell skeleton" style="width:60px;float:right"></div></td>
+    </tr>`).join('');
+}
+
+async function fetchAcoes() {
+  showSkeletons('gainers-body');
+  showSkeletons('losers-body');
+  try {
+    const quotes = await fetchQuotes(ACOES_IBOV);
+    const valid = quotes.filter(q => q.regularMarketChangePercent != null);
+    valid.sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent);
+
+    const gainers = valid.slice(0, 10);
+    const losers  = valid.slice(-10).reverse();
+
+    document.getElementById('gainers-body').innerHTML =
+      gainers.length ? gainers.map(buildRow).join('') : '<tr><td colspan="4" class="empty-state">Sem dados</td></tr>';
+    document.getElementById('losers-body').innerHTML =
+      losers.length  ? losers.map(buildRow).join('')  : '<tr><td colspan="4" class="empty-state">Sem dados</td></tr>';
+
+    updateTape(valid);
+  } catch (e) {
+    document.getElementById('gainers-body').innerHTML = `<tr><td colspan="4" class="empty-state">Erro ao carregar dados</td></tr>`;
+    document.getElementById('losers-body').innerHTML  = `<tr><td colspan="4" class="empty-state">Erro ao carregar dados</td></tr>`;
+    console.error(e);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   RENDER FIIs
+─────────────────────────────────────────────────────────── */
+const FII_TYPES = {
+  MXRF11:'Recebíveis',HGLG11:'Logística',KNRI11:'Híbrido',XPLG11:'Logística',
+  IFIX11:'ETF',VISC11:'Shopping',BRCO11:'Logística',HSML11:'Shopping',
+  XPML11:'Shopping',RBVA11:'Recebíveis',HGRE11:'Lajes Corp',PVBI11:'Lajes Corp',
+  VGIP11:'Recebíveis',BTLG11:'Logística',ALZR11:'Híbrido',KNCR11:'Recebíveis',
+  RBRR11:'Recebíveis',IRDM11:'Recebíveis',VINO11:'Lajes Corp',URPR11:'Recebíveis',
+  RZTR11:'Agro',BCFF11:'FoF',CXCE11:'Educacional',HABT11:'Residencial',
+  HGBS11:'Shopping',MALL11:'Shopping',VRTA11:'Recebíveis',JSRE11:'Híbrido',
+  RECT11:'Lajes Corp',TGAR11:'Híbrido',PATL11:'Logística',LVBI11:'Logística'
+};
+
+function buildFiiTile(q) {
+  const chg   = q.regularMarketChangePercent;
+  const type  = FII_TYPES[q.symbol] || 'FII';
+  const pill  = `<span class="chg-pill ${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(2)}%</span>`;
+  return `<div class="fii-tile">
+    <div class="fii-top">
+      <span class="fii-sym">${q.symbol}</span>
+      <span class="fii-type">${type}</span>
+    </div>
+    <div class="fii-name">${q.shortName || '—'}</div>
+    <div class="fii-bottom">
+      <div>
+        <div class="fii-price">${fmtBRL(q.regularMarketPrice)}</div>
+        <div class="fii-dy">Vol: <span>${q.regularMarketVolume ? Number(q.regularMarketVolume).toLocaleString('pt-BR') : '—'}</span></div>
+      </div>
+      ${pill}
+    </div>
+  </div>`;
+}
+
+async function fetchFiis() {
+  document.getElementById('fiis-grid').innerHTML = `<div style="padding:40px;color:var(--muted);text-align:center;">Carregando FIIs...</div>`;
+  try {
+    const quotes = await fetchQuotes(FIIS_LIST);
+    const valid  = quotes.filter(q => q.regularMarketPrice != null);
+    valid.sort((a, b) => (b.regularMarketChangePercent ?? 0) - (a.regularMarketChangePercent ?? 0));
+    document.getElementById('fiis-grid').innerHTML =
+      valid.length ? valid.map(buildFiiTile).join('') : '<div class="empty-state">Sem dados de FIIs</div>';
+  } catch (e) {
+    document.getElementById('fiis-grid').innerHTML = `<div class="empty-state">Erro ao carregar FIIs</div>`;
+    console.error(e);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   TICKER TAPE
+─────────────────────────────────────────────────────────── */
+function updateTape(quotes) {
+  const highlight = ['PETR4','VALE3','ITUB4','BBDC4','WEGE3','BBAS3','ABEV3','MGLU3','PRIO3','AZUL4'];
+  const items = quotes
+    .filter(q => highlight.includes(q.symbol))
+    .map(q => {
+      const chg = q.regularMarketChangePercent;
+      const arrow = chg > 0 ? '▲' : chg < 0 ? '▼' : '—';
+      const c = chg > 0 ? 'var(--green)' : chg < 0 ? 'var(--red)' : 'var(--muted)';
+      return `<span class="tape-item">
+        <span class="sym">${q.symbol}</span>
+        <span class="val">R$ ${Number(q.regularMarketPrice).toFixed(2)}</span>
+        <span style="color:${c}">${arrow} ${Math.abs(chg).toFixed(2)}%</span>
+      </span>`;
+    });
+  if (items.length) document.getElementById('tape').innerHTML = items.join('') + items.join('');
+}
+
+/* ───────────────────────────────────────────────────────────
+   MAIN FETCH
+─────────────────────────────────────────────────────────── */
+async function fetchAll() {
+  document.getElementById('last-update').textContent = 'Atualizando...';
+  await Promise.all([fetchIndices(), fetchAcoes(), fetchFiis()]);
+  const now = new Date();
+  document.getElementById('last-update').textContent =
+    `Última atualização: ${now.toLocaleTimeString('pt-BR')} — dados via brapi.dev`;
+}
+
+// Boot
+fetchAll();
+// Auto-refresh a cada 60s
+setInterval(fetchAll, 60_000);
+</script>
+</body>
+</html>
