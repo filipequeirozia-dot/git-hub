@@ -59,9 +59,8 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # Principais blue chips da B3 (ações de maior relevância)
 BR_BLUE_CHIPS = [
     "PETR3","PETR4","VALE3","ITUB4","BBDC4","ABEV3","WEGE3","RENT3",
-    "BBAS3","SUZB3","ELET3","B3SA3","PRIO3","JBSS3","EMBR3","BPAC11",
-    "RDOR3","EQTL3","CSAN3","RADL3","HAPV3","CPLE6","SBSP3","VIVT3",
-    "CMIG4","GGBR4","ITSA4","BRFS3","ENEV3","AZUL4",
+    "BBAS3","SUZB3","B3SA3","PRIO3","BPAC11","RDOR3","EQTL3","CSAN3",
+    "RADL3","HAPV3","SBSP3","VIVT3","CMIG4","GGBR4","ITSA4","ENEV3",
 ]
 
 # Principais ações globais (NYSE/NASDAQ) — ticker: nome amigável
@@ -202,43 +201,60 @@ def fetch_top_movers() -> dict:
 
 
 def fetch_main_br_stocks() -> dict:
-    """Busca altas e baixas entre as principais blue chips da B3."""
+    """Busca altas e baixas entre as principais blue chips da B3.
+    Com token: consulta a lista fixa de blue chips (BR_BLUE_CHIPS).
+    Sem token: usa /quote/list com top movers gerais.
+    """
     print("  🇧🇷 Buscando principais blue chips da B3...")
-    quotes = fetch_brapi(*BR_BLUE_CHIPS)
+
+    # Busca blue chips via Yahoo Finance (.SA) — funciona sem token
     items = []
-    for sym, q in quotes.items():
-        change = float(q.get("regularMarketChangePercent") or 0)
-        price = float(q.get("regularMarketPrice") or 0)
-        name = q.get("shortName") or q.get("longName") or sym
-        if price > 0:
-            items.append({"stock": sym, "name": name, "change": change, "price": price, "currency": "BRL"})
-    items.sort(key=lambda x: x["change"], reverse=True)
-    return {"highs": items[:5], "lows": items[-5:][::-1]}
+    for sym in BR_BLUE_CHIPS:
+        q = yf_quote(f"{sym}.SA")
+        if q["price"] > 0:
+            items.append({
+                "stock": sym,
+                "name": sym,
+                "change": q["change"],
+                "price": q["price"],
+                "currency": "BRL",
+            })
+    if items:
+        items.sort(key=lambda x: x["change"], reverse=True)
+        return {"highs": items[:5], "lows": items[-5:][::-1]}
+
+    # Sem token: usa endpoint /quote/list (não requer autenticação)
+    def _parse(order: str) -> list:
+        r = _get(f"https://brapi.dev/api/quote/list?sortBy=change&sortOrder={order}&limit=15&type=stock")
+        if not r:
+            return []
+        return [
+            {"stock": s["stock"], "name": s.get("name") or s["stock"],
+             "change": float(s.get("change") or 0), "price": float(s.get("close") or 0),
+             "currency": "BRL"}
+            for s in r.json().get("stocks", [])
+            if float(s.get("close") or 0) > 0 and s.get("volume", 0) > 500
+        ][:5]
+
+    return {"highs": _parse("desc"), "lows": _parse("asc")}
 
 
 def fetch_global_movers() -> dict:
-    """Busca top altas e baixas globais via Yahoo Finance (batch)."""
+    """Busca top altas e baixas globais via Yahoo Finance (yf_quote individual por símbolo)."""
     print("  🌍 Buscando principais ações globais...")
-    symbols_str = ",".join(GLOBAL_STOCKS_MAP.keys())
-    enc = requests.utils.quote(symbols_str)
-    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={enc}&lang=en-US&region=US"
-    try:
-        r = requests.get(url, headers=YF_HEADERS, timeout=15)
-        r.raise_for_status()
-        result = r.json().get("quoteResponse", {}).get("result", [])
-        items = []
-        for q in result:
-            sym = q.get("symbol", "")
-            price = float(q.get("regularMarketPrice") or 0)
-            change = float(q.get("regularMarketChangePercent") or 0)
-            name = GLOBAL_STOCKS_MAP.get(sym) or q.get("shortName") or sym
-            if price > 0:
-                items.append({"stock": sym, "name": name, "change": change, "price": price, "currency": "USD"})
-        items.sort(key=lambda x: x["change"], reverse=True)
-        return {"highs": items[:5], "lows": items[-5:][::-1]}
-    except Exception as e:
-        print(f"  [WARN] Global movers: {e}")
-        return {"highs": [], "lows": []}
+    items = []
+    for sym in GLOBAL_STOCKS_MAP:
+        q = yf_quote(sym)
+        if q["price"] > 0:
+            items.append({
+                "stock": sym,
+                "name": GLOBAL_STOCKS_MAP[sym],
+                "change": q["change"],
+                "price": q["price"],
+                "currency": "USD",
+            })
+    items.sort(key=lambda x: x["change"], reverse=True)
+    return {"highs": items[:5], "lows": items[-5:][::-1]}
 
 
 def fetch_market_data() -> dict:
@@ -1337,16 +1353,24 @@ function setRows(elId,items,isHigh){{
   if(el&&items&&items.length)el.innerHTML=items.map(function(x,i){{return mkRow(i+1,x,isHigh);}}).join('');
 }}
 async function loadBR(){{
-  var chips=BR_CHIPS.join(',');
-  var url='https://brapi.dev/api/quote/'+chips+'?fundamental=false'+(BRAPI_TOKEN_RT?'&token='+BRAPI_TOKEN_RT:'');
   try{{
-    var r=await fetch(url);
-    var d=await r.json();
-    var items=(d.results||[]).filter(function(q){{return q.regularMarketPrice>0;}}).map(function(q){{
-      return {{stock:q.symbol,name:q.shortName||q.symbol,change:q.regularMarketChangePercent||0,price:q.regularMarketPrice||0,currency:'BRL'}};
-    }}).sort(function(a,b){{return b.change-a.change;}});
-    setRows('br-highs',items.slice(0,5),true);
-    setRows('br-lows',items.slice(-5).reverse(),false);
+    // Busca blue chips via Yahoo Finance (.SA)
+    var results=await Promise.all(BR_CHIPS.map(async function(sym){{
+      try{{
+        var r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym+'.SA')+'?interval=1d&range=2d',{{headers:{{'Accept':'application/json'}}}});
+        var d=await r.json();
+        var meta=(((d||{{}}).chart||{{}}).result||[{{}}])[0].meta||{{}};
+        var price=meta.regularMarketPrice||0;
+        var prev=meta.chartPreviousClose||meta.previousClose||price;
+        var chg=prev?(price-prev)/prev*100:0;
+        return {{stock:sym,name:sym,change:chg,price:price,currency:'BRL'}};
+      }}catch(e){{return null;}}
+    }}));
+    var items=results.filter(function(x){{return x&&x.price>0;}}).sort(function(a,b){{return b.change-a.change;}});
+    if(items.length){{
+      setRows('br-highs',items.slice(0,5),true);
+      setRows('br-lows',items.slice(-5).reverse(),false);
+    }}
     var st=document.getElementById('br-status');
     if(st)st.textContent=isBROpen()?'🟢 Mercado aberto':'⚪️ Últ. pregão';
     var upd=document.getElementById('br-updated');
@@ -1354,14 +1378,20 @@ async function loadBR(){{
   }}catch(e){{console.warn('BR fetch error',e);}}
 }}
 async function loadGlobal(){{
-  var syms=Object.keys(GLOBAL_NAMES).join(',');
-  var url='https://query2.finance.yahoo.com/v7/finance/quote?symbols='+encodeURIComponent(syms);
+  var syms=Object.keys(GLOBAL_NAMES);
   try{{
-    var r=await fetch(url,{{headers:{{'Accept':'application/json'}}}});
-    var d=await r.json();
-    var items=(((d||{{}}).quoteResponse||{{}}).result||[]).filter(function(q){{return q.regularMarketPrice>0;}}).map(function(q){{
-      return {{stock:q.symbol,name:GLOBAL_NAMES[q.symbol]||q.shortName||q.symbol,change:q.regularMarketChangePercent||0,price:q.regularMarketPrice||0,currency:'USD'}};
-    }}).sort(function(a,b){{return b.change-a.change;}});
+    var results=await Promise.all(syms.map(async function(sym){{
+      try{{
+        var r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?interval=1d&range=2d',{{headers:{{'Accept':'application/json'}}}});
+        var d=await r.json();
+        var meta=(((d||{{}}).chart||{{}}).result||[{{}}])[0].meta||{{}};
+        var price=meta.regularMarketPrice||0;
+        var prev=meta.chartPreviousClose||meta.previousClose||price;
+        var chg=prev?(price-prev)/prev*100:0;
+        return {{stock:sym,name:GLOBAL_NAMES[sym]||sym,change:chg,price:price,currency:'USD'}};
+      }}catch(e){{return null;}}
+    }}));
+    var items=results.filter(function(x){{return x&&x.price>0;}}).sort(function(a,b){{return b.change-a.change;}});
     if(items.length){{
       setRows('global-highs',items.slice(0,5),true);
       setRows('global-lows',items.slice(-5).reverse(),false);
@@ -1370,7 +1400,7 @@ async function loadGlobal(){{
       var upd=document.getElementById('global-updated');
       if(upd)upd.textContent='Atualizado: '+new Date().toLocaleTimeString('pt-BR');
     }}
-  }}catch(e){{console.warn('Global fetch failed (CORS?)',e);}}
+  }}catch(e){{console.warn('Global fetch failed',e);}}
 }}
 function refreshAll(){{loadBR();loadGlobal();}}
 refreshAll();
